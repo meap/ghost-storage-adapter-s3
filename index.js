@@ -67,7 +67,12 @@ class Store extends _ghostStorageBase2.default {
     this.serverSideEncryption = process.env.GHOST_STORAGE_ADAPTER_S3_SSE || serverSideEncryption || '';
     this.s3ForcePathStyle = Boolean(process.env.GHOST_STORAGE_ADAPTER_S3_FORCE_PATH_STYLE) || Boolean(forcePathStyle) || false;
     this.signatureVersion = process.env.GHOST_STORAGE_ADAPTER_S3_SIGNATURE_VERSION || signatureVersion || 'v4';
-    this.acl = process.env.GHOST_STORAGE_ADAPTER_S3_ACL || acl || 'public-read';
+    // Default to 'none' (skip the ACL parameter on PutObject) because all
+    // S3 buckets created after April 2023 default to Object Ownership =
+    // BucketOwnerEnforced, which rejects any request that includes an ACL.
+    // Set GHOST_STORAGE_ADAPTER_S3_ACL=public-read (or pass `acl` in config)
+    // to opt back into the upstream behaviour for legacy buckets.
+    this.acl = process.env.GHOST_STORAGE_ADAPTER_S3_ACL || acl || 'none';
 
     // Required by Ghost 6's legacy ImageHandler during ZIP import.
     // `core/server/data/importer/handlers/image.js:18` reads this property
