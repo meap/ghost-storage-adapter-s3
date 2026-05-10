@@ -137,21 +137,50 @@ class Store extends BaseStore {
     options = options || {}
 
     return new Promise((resolve, reject) => {
-      // remove trailing slashes
-      let path = (options.path || '').replace(/\/$|\\$/, '')
-
-      // check if path is stored in s3 handled by us
-      if (!path.startsWith(this.host)) {
+      const path = (options.path || '').replace(/\/$|\\$/, '')
+      const key = this._resolveKey(path)
+      if (key === null) {
         reject(new Error(`${path} is not stored in s3`))
+        return
       }
-      path = path.substring(this.host.length)
 
       this.s3()
         .getObject({
           Bucket: this.bucket,
-          Key: stripLeadingSlash(path)
+          Key: key
         }, (err, data) => err ? reject(err) : resolve(data.Body))
     })
+  }
+
+  // Maps the variety of "paths" Ghost may pass to read() into the S3 Key for
+  // the underlying object. Returns null if the path clearly doesn't belong to
+  // this adapter.
+  //
+  // Forms handled:
+  //   1. `${this.host}/<key>`
+  //        Image URL produced by save() — strip the host prefix.
+  //   2. `<scheme>://<site>/.../content/images/<rest>`
+  //   3. `/content/images/<rest>` (site-relative)
+  //        Used when the post body references an image with the standard
+  //        Ghost `/content/images/` URL — for example after a bulk migration
+  //        that uploaded binaries straight to S3 instead of through save().
+  //        Without this branch Ghost's image-transform middleware can't read
+  //        the original to produce resized variants and falls back to a 302
+  //        redirect to the full-size image, defeating responsive images.
+  _resolveKey (path) {
+    if (!path) return null
+
+    if (path.startsWith(this.host)) {
+      return stripLeadingSlash(path.substring(this.host.length))
+    }
+
+    const marker = '/content/images/'
+    const idx = path.indexOf(marker)
+    if (idx === -1) return null
+
+    const tail = path.substring(idx + marker.length)
+    const prefix = stripEndingSlash(this.pathPrefix || '')
+    return stripLeadingSlash(prefix ? `${prefix}/${tail}` : tail)
   }
 }
 

@@ -177,22 +177,51 @@ class Store extends _ghostStorageBase2.default {
     options = options || {};
 
     return new Promise(function (resolve, reject) {
-      // remove trailing slashes
       var path = (options.path || '').replace(/\/$|\\$/, '');
-
-      // check if path is stored in s3 handled by us
-      if (!path.startsWith(_this5.host)) {
+      var key = _this5._resolveKey(path);
+      if (key === null) {
         reject(new Error(`${path} is not stored in s3`));
+        return;
       }
-      path = path.substring(_this5.host.length);
 
       _this5.s3().getObject({
         Bucket: _this5.bucket,
-        Key: stripLeadingSlash(path)
+        Key: key
       }, function (err, data) {
         return err ? reject(err) : resolve(data.Body);
       });
     });
+  }
+
+  // Maps the variety of "paths" Ghost may pass to read() into the S3 Key for
+  // the underlying object. Returns null if the path clearly doesn't belong to
+  // this adapter.
+  //
+  // Forms handled:
+  //   1. `${this.host}/<key>`
+  //        Image URL produced by save() — strip the host prefix.
+  //   2. `<scheme>://<site>/.../content/images/<rest>`
+  //   3. `/content/images/<rest>` (site-relative)
+  //        Used when the post body references an image with the standard
+  //        Ghost `/content/images/` URL — for example after a bulk migration
+  //        that uploaded binaries straight to S3 instead of through save().
+  //        Without this branch Ghost's image-transform middleware can't read
+  //        the original to produce resized variants and falls back to a 302
+  //        redirect to the full-size image, defeating responsive images.
+  _resolveKey(path) {
+    if (!path) return null;
+
+    if (path.startsWith(this.host)) {
+      return stripLeadingSlash(path.substring(this.host.length));
+    }
+
+    var marker = '/content/images/';
+    var idx = path.indexOf(marker);
+    if (idx === -1) return null;
+
+    var tail = path.substring(idx + marker.length);
+    var prefix = stripEndingSlash(this.pathPrefix || '');
+    return stripLeadingSlash(prefix ? `${prefix}/${tail}` : tail);
   }
 }
 
