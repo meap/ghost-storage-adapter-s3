@@ -40,6 +40,14 @@ class Store extends BaseStore {
     this.s3ForcePathStyle = Boolean(process.env.GHOST_STORAGE_ADAPTER_S3_FORCE_PATH_STYLE) || Boolean(forcePathStyle) || false
     this.signatureVersion = process.env.GHOST_STORAGE_ADAPTER_S3_SIGNATURE_VERSION || signatureVersion || 'v4'
     this.acl = process.env.GHOST_STORAGE_ADAPTER_S3_ACL || acl || 'public-read'
+
+    // Required by Ghost 6's legacy ImageHandler during ZIP import.
+    // `core/server/data/importer/handlers/image.js:18` reads this property
+    // unguarded as `store.staticFileURLPrefix.split('/')`. Without it the
+    // entire WordPress→Ghost ZIP import crashes with
+    // `Cannot read properties of undefined (reading 'split')`.
+    // Value matches Ghost's built-in `urlUtils.STATIC_IMAGE_URL_PREFIX`.
+    this.staticFileURLPrefix = '/content/images'
   }
 
   delete (fileName, targetDir) {
