@@ -136,13 +136,19 @@ class Store extends _ghostStorageBase2.default {
             file = _ref2[1];
 
         var config = {
-          ACL: _this3.acl,
           Body: file,
           Bucket: _this3.bucket,
           CacheControl: `max-age=${30 * 24 * 60 * 60}`,
           ContentType: image.type,
           Key: stripLeadingSlash(fileName)
-        };
+          // Buckets with Object Ownership = BucketOwnerEnforced (the default for
+          // buckets created after April 2023) reject any request that includes
+          // an ACL. Set GHOST_STORAGE_ADAPTER_S3_ACL=none (or pass acl: 'none')
+          // to skip the parameter entirely; reads are expected to go through a
+          // bucket policy / CloudFront in that setup.
+        };if (_this3.acl && _this3.acl !== 'none') {
+          config.ACL = _this3.acl;
+        }
         if (_this3.serverSideEncryption !== '') {
           config.ServerSideEncryption = _this3.serverSideEncryption;
         }

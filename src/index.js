@@ -100,12 +100,19 @@ class Store extends BaseStore {
         readFileAsync(image.path)
       ]).then(([ fileName, file ]) => {
         let config = {
-          ACL: this.acl,
           Body: file,
           Bucket: this.bucket,
           CacheControl: `max-age=${30 * 24 * 60 * 60}`,
           ContentType: image.type,
           Key: stripLeadingSlash(fileName)
+        }
+        // Buckets with Object Ownership = BucketOwnerEnforced (the default for
+        // buckets created after April 2023) reject any request that includes
+        // an ACL. Set GHOST_STORAGE_ADAPTER_S3_ACL=none (or pass acl: 'none')
+        // to skip the parameter entirely; reads are expected to go through a
+        // bucket policy / CloudFront in that setup.
+        if (this.acl && this.acl !== 'none') {
+          config.ACL = this.acl
         }
         if (this.serverSideEncryption !== '') {
           config.ServerSideEncryption = this.serverSideEncryption
